@@ -20,7 +20,7 @@ const pg = require('pg');
 // Postgres Client Setup
 //==========================================
 
-const client = pg.Client(process.env.DATABASE_URL);
+const client = new pg.Client(process.env.DATABASE_URL);
 client.connect();
 client.on('error', error => console.error(error));
 
@@ -57,21 +57,14 @@ function searchLatLng(request, response) {
   // take the data from the front end
   const query = request.query.data;
   const geocodeData = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${process.env.GEOCODE_API_KEY}`;
-  console.log('checking the DATABASE');
-  client.query('SELECT * FROM locations WHERE search_query=$1', [query])
-    .then(result => {
-      console.log('result from DATABASE');
-      if (result.rows.length) { // (stuff in the db)
-        console.log('Exists in the DATABASE');
-        response.send(result.rows[0]);
-      } else {
-        superagent.get(geocodeData).then(locationResult => {
-          const first = locationResult.body.results[0];
-          const responseObject = new Location(query, first);
-          response.send(responseObject);
-        });
-      }
-    });
+
+  superagent.get(geocodeData).then(locationResult => {
+    const first = locationResult.body.results[0];
+    const location = new Location(query, first);
+    client.query('INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4)', [location.search_query, location.formatted_query, location.latitude, location.longitude]);
+    response.send(location);
+  });
+
 }
 
 function searchWeather(request, response) {
