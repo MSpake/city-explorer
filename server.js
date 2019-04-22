@@ -31,7 +31,6 @@ client.on('error', error => console.error(error));
 const app = express();
 app.use(cors());
 
-
 //==========================================
 // Constructors
 //==========================================
@@ -53,38 +52,59 @@ function DailyWeather(forecast, time) {
 // Helper Functions
 //==========================================
 
-function searchLatLng(request, response) {
-  // take the data from the front end
-  const query = request.query.data;
-  const geocodeData = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${process.env.GEOCODE_API_KEY}`;
+function locationQuery(request, response) {
+  console.log('location');
 
-  superagent.get(geocodeData).then(locationResult => {
-    const first = locationResult.body.results[0];
-    const location = new Location(query, first);
-    client.query('INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4)', [location.search_query, location.formatted_query, location.latitude, location.longitude]);
-    response.send(location);
-  });
+  const query = request.query.data;
+  client.query('SELECT * FROM locations WHERE search_query=$1', [query])
+    .then(result => {
+      if (result.rows.length) {
+        console.log('from database');
+        response.send(result.rows[0]);
+      } else {
+        console.log('from internet');
+        searchLocation(query, response);
+      }
+    });
+
 
 }
 
-function searchWeather(request, response) {
-  const weatherQuery = request.query.data;
-  const weatherData = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${weatherQuery.latitude},${weatherQuery.longitude}`;
+function weatherQuery(request, response) {
+  console.log('weather');
 
-  superagent.get(weatherData).then(weatherResult => {
-    const weeklyWeatherArray = weatherResult.body.daily.data.map(dayObj => new DailyWeather(dayObj.summary, dayObj.time));
+  const query = request.query.data;
+  const weatherData = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${query.latitude},${query.longitude}`;
+
+  superagent.get(weatherData).then(result => {
+    const weeklyWeatherArray = result.body.daily.data.map(dayObj => new DailyWeather(dayObj.summary, dayObj.time));
     response.send(weeklyWeatherArray);
   });
 }
 
 
+function searchLocation(query, response) {
+  const geocodeData = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${process.env.GEOCODE_API_KEY}`;
+
+  superagent.get(geocodeData).then(result => {
+    const firstResult = result.body.results[0];
+    const location = new Location(query, firstResult);
+    client.query('INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4)', [location.search_query, location.formatted_query, location.latitude, location.longitude]);
+    client.query('SELECT * FROM locations;').then(result => {
+      console.log(result.rows);
+      response.send(location);
+    });
+  });
+}
+
 //==========================================
 // Server
 //==========================================
 
-app.get('/location', searchLatLng);
+app.get('/location', locationQuery);
 
-app.get('/weather', searchWeather);
+app.get('/weather', weatherQuery);
+
 
 // Standard response for when a route that does not exist is accessed.
 app.use('*', (request, response) => {
