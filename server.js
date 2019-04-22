@@ -102,22 +102,32 @@ function weatherQuery(request, response) {
     client.query('SELECT * FROM weathers WHERE location_id=$1', [locationId]).then(result => {
       if (result.rows.length) {
         console.log('from database');
-        console.log(result.rows.map(dayObj => new DailyWeather(dayObj.forecast, dayObj.time)));
-        response.send(result.rows.map(dayObj => new DailyWeather(dayObj.forecast, dayObj.time)));
+        console.log(result.rows);
+        const difference = (Date.now() / 1000) - (parseInt(result.rows[0].time, 10));
+        console.log(difference);
+        if (difference < 86400) {
+          response.send(result.rows.map(dayObj => new DailyWeather(dayObj.forecast, dayObj.time)));
+        } else {
+          searchWeather(query, locationId, response, true);
+        }
       } else {
         console.log('from internet');
-        searchWeather(query, locationId, response);
+        searchWeather(query, locationId, response, false);
       }
     });
   });
 }
 
-function searchWeather(query, locationId, response) {
+function searchWeather(query, locationId, response, update) {
   const weatherData = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${query.latitude},${query.longitude}`;
 
   superagent.get(weatherData).then(result => {
     const weeklyWeatherArray = result.body.daily.data.map(dayObj => {
-      client.query('INSERT INTO weathers (forecast, time, location_id) VALUES ($1, $2, $3)', [dayObj.summary, dayObj.time, locationId]);
+      if (update) {
+        client.query('UPDATE weathers SET forecast=$1, time=$2 WHERE location_id=$3', [dayObj.summary, dayObj.time, locationId]);
+      } else {
+        client.query('INSERT INTO weathers (forecast, time, location_id) VALUES ($1, $2, $3)', [dayObj.summary, dayObj.time, locationId]);
+      }
       return new DailyWeather(dayObj.summary, dayObj.time);
     });
     response.send(weeklyWeatherArray);
