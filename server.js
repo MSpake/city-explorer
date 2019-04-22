@@ -14,6 +14,15 @@ const PORT = process.env.PORT || 3000;
 const express = require('express');
 const cors = require('cors');
 const superagent = require('superagent');
+const pg = require('pg');
+
+//==========================================
+// Postgres Client Setup
+//==========================================
+
+const client = new pg.Client(process.env.DATABASE_URL);
+client.connect();
+client.on('error', error => console.error(error));
 
 //==========================================
 // Server Definition
@@ -23,59 +32,18 @@ const app = express();
 app.use(cors());
 
 //==========================================
-// Server
+// SQL
 //==========================================
 
-//the route
-//request = data from query. example, from a front end query
-//can test in localhost:3000/location to verify
-
-// Switched app.get from an anonymous function to a named callback.
-app.get('/location', searchLatLng);
-
-app.get('/weather', searchWeather);
-
-// Standard response for when a route that does not exist is accessed.
-app.use('*', (request, response) => {
-  response.send('Our server runs.');
-})
-
-//==========================================
-// Helper Functions
-//==========================================
-
-function searchLatLng(request, response) {
-  // take the data from the front end, as the searched for location ('berlin')
-  const query = request.query.data;
-  const geocodeData = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${process.env.GEOCODE_API_KEY}`;
-
-  superagent.get(geocodeData).then(locationResult => {
-    const first = locationResult.body.results[0];
-    const responseObject = new Location(query, first);
-    response.send(responseObject);
-  })
-
-}
-
-function searchWeather(request, response) {
-  const weatherQuery = request.query.data;
-  const weatherData = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${weatherQuery.latitude},${weatherQuery.longitude}`;
-
-  superagent.get(weatherData).then(weatherResult => {
-    const weeklyWeatherArray = weatherResult.body.daily.data.map(dayObj => new DailyWeather(dayObj.summary, dayObj.time));
-    response.send(weeklyWeatherArray);
-  })
-}
-
+const SQL = {};
+SQL.getLocation = 'SELECT * FROM locations WHERE search_query=$1';
+SQL.insertLocation = 'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4)';
+SQL.getLocationReference = 'SELECT id FROM locations WHERE latitude=$1 AND longitude=$2';
+// SQL.getData = `SELECT * FROM ${route} WHERE location_id=${locationId}`;
 
 //==========================================
 // Constructors
 //==========================================
-
-function DailyWeather(forecast, time) {
-  this.forecast = forecast;
-  this.time = new Date(time * 1000).toString().slice(0, 15);
-}
 
 function Location(query, data) {
   this.search_query = query;
@@ -84,9 +52,105 @@ function Location(query, data) {
   this.longitude = data.geometry.location.lng;
 }
 
+function DailyWeather(forecast, time) {
+  this.forecast = forecast;
+  this.time = new Date(time * 1000).toString().slice(0, 15);
+}
+
+
+//==========================================
+// Helper Functions
+//==========================================
+
+function locationQuery(request, response) {
+  console.log('location');
+
+  const query = request.query.data;
+  client.query(SQL.getLocation, [query])
+    .then(result => {
+      if (result.rows.length) {
+        console.log('from database');
+        response.send(result.rows[0]);
+      } else {
+        console.log('from internet');
+        searchLocation(query, response);
+      }
+    });
+}
+
+function searchLocation(query, response) {
+  const geocodeData = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${process.env.GEOCODE_API_KEY}`;
+
+  superagent.get(geocodeData).then(result => {
+    const firstResult = result.body.results[0];
+    const location = new Location(query, firstResult);
+    client.query(SQL.insertLocation, [location.search_query, location.formatted_query, location.latitude, location.longitude]);
+    client.query('SELECT * FROM locations;').then(result => {
+      console.log(result.rows);
+      response.send(location);
+    });
+  });
+}
+
+function weatherQuery(request, response) {
+  console.log('weather');
+  const route = 'weather';
+  const query = request.query.data;
+  let locationId;
+  client.query(SQL.getLocationReference, [query.latitude, query.longitude]).then(result => {
+    locationId = result.rows[0].id;
+    client.query('SELECT * FROM weathers WHERE location_id=$1', [locationId]).then(result => {
+      if (result.rows.length) {
+        console.log('from database');
+        console.log(result.rows);
+        const difference = (Date.now() / 1000) - (parseInt(result.rows[0].time, 10));
+        console.log(difference);
+        if (difference < 86400) {
+          response.send(result.rows.map(dayObj => new DailyWeather(dayObj.forecast, dayObj.time)));
+        } else {
+          searchWeather(query, locationId, response, true);
+        }
+      } else {
+        console.log('from internet');
+        searchWeather(query, locationId, response, false);
+      }
+    });
+  });
+}
+
+function searchWeather(query, locationId, response, update) {
+  const weatherData = `https://api.darksky.net/forecast/${process.env.WEATHER_API_KEY}/${query.latitude},${query.longitude}`;
+
+  superagent.get(weatherData).then(result => {
+    const weeklyWeatherArray = result.body.daily.data.map(dayObj => {
+      if (update) {
+        client.query('UPDATE weathers SET forecast=$1, time=$2 WHERE location_id=$3', [dayObj.summary, dayObj.time, locationId]);
+      } else {
+        client.query('INSERT INTO weathers (forecast, time, location_id) VALUES ($1, $2, $3)', [dayObj.summary, dayObj.time, locationId]);
+      }
+      return new DailyWeather(dayObj.summary, dayObj.time);
+    });
+    response.send(weeklyWeatherArray);
+  });
+}
+
+//==========================================
+// Server
+//==========================================
+
+app.get('/location', locationQuery);
+
+app.get('/weather', weatherQuery);
+
+
+// Standard response for when a route that does not exist is accessed.
+app.use('*', (request, response) => {
+  response.send('Route not available');
+});
+
 //==========================================
 
 //server start
 app.listen(PORT, () => {
-  console.log(`app is up on PORT ${PORT}`)
-})
+  console.log(`app is up on PORT ${PORT}`);
+});
