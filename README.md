@@ -1,5 +1,5 @@
 # Project Name  
-**Version**: 1.1.0  
+**Version**: 1.2.0  
 **Author**:  
 Rebecca (Becky) Peterson  
 Tammy Do  
@@ -34,14 +34,6 @@ Based on the weather, a person can also what activities they want to do such as 
   
   
 ## Change Log  
-<!-- Use this area to document the iterative changes made to your application as each feature is successfully implemented. Use time stamps. Here's an examples:
-
-01-01-2001 4:59pm - Application now has a fully-functional express server, with a GET route for the location resource.
-
-## Credits and Collaborations
-<!-- Give credit (and a link) to other people or resources that helped you build this application. -->
--->
-
   
 Corrections  
 Start time: 9:45am  
@@ -62,3 +54,7 @@ Feature 3: Weather API
 Start time: 12:30pm    
 Finish time: 1:10pm    
 Actual time needed to complete: 40min    
+  
+Sunday 4/21 6:30pm - Database locations table linked and working  
+Sunday 4/21 9:30pm - Database weathers table linked and working  
+Monday 4/22 7:30am - Update condition added for weather  
