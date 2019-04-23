@@ -1,9 +1,8 @@
-
-DROP TABLE IF EXISTS locations;
 DROP TABLE IF EXISTS weathers;
 DROP TABLE IF EXISTS movies;
 DROP TABLE IF EXISTS yelp;
 DROP TABLE IF EXISTS trails;
+DROP TABLE IF EXISTS locations;
 
 
 CREATE TABLE locations ( 
@@ -18,11 +17,12 @@ CREATE TABLE weathers (
   id SERIAL PRIMARY KEY,
   summary VARCHAR(255),
   time VARCHAR(255),
+  date_created VARCHAR(255),
   location_id INTEGER NOT NULL,
   FOREIGN KEY (location_id) REFERENCES locations (id)
-)
+);
 
-CREATE TABLE movies (
+CREATE TABLE movies ( 
   id SERIAL PRIMARY KEY,
   title VARCHAR(255),
   overview TEXT,
@@ -31,20 +31,22 @@ CREATE TABLE movies (
 --image_url VARCHAR(255),
   popularity FLOAT,
   released_on VARCHAR(255),
+  -- date_created VARCHAR(255),
   location_id INTEGER NOT NULL,
   FOREIGN KEY (location_id) REFERENCES locations (id)
-)
+);
 
 CREATE TABLE yelp (
   id SERIAL PRIMARY KEY,
---image_url VARCHAR(255),
+  image_url VARCHAR(255),
   name VARCHAR(255),
   price VARCHAR(255),
   rating FLOAT,
   url VARCHAR(255),
+  -- date_created VARCHAR(255),
   location_id INTEGER NOT NULL,
   FOREIGN KEY (location_id) REFERENCES locations (id)
-)
+);
 
 
 CREATE TABLE trails (
@@ -57,11 +59,12 @@ CREATE TABLE trails (
   summary VARCHAR(255),
   trail_url VARCHAR(255),
   conditions TEXT,
---condition_date VARCHAR(255),
+condition_date VARCHAR(255),
 --condition_time VARCHAR(255)
 -- "conditionDate": "2019-02-28 19:09:17"
+  -- date_created VARCHAR(255),
   location_id INTEGER NOT NULL,
   FOREIGN KEY (location_id) REFERENCES locations (id)
-)
+);
 
  

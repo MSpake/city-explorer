@@ -39,7 +39,10 @@ const SQL = {};
 SQL.getLocation = 'SELECT * FROM locations WHERE search_query=$1';
 SQL.insertLocation = 'INSERT INTO locations (search_query, formatted_query, latitude, longitude) VALUES ($1, $2, $3, $4)';
 SQL.getLocationReference = 'SELECT id FROM locations WHERE latitude=$1 AND longitude=$2';
-// SQL.getData = `SELECT * FROM ${route} WHERE location_id=${locationId}`;
+SQL.insertWeather = 'INSERT INTO weathers (summary, time, location_id) VALUES ($1, $2, $3)';
+SQL.insertMovies = 'INSERT INTO movies (title, overview, average_votes, total_votes, popularity, released_on, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7)';
+SQL.insertYelp = 'INSERT INTO yelp (name, image_url, price, rating, url, location_id) VALUES ($1, $2, $3, $4, $5, $6)';
+SQL.insertTrail = 'INSERT INTO trails (name, location, length, stars, star_votes, summary, trail_url, conditions, condition_date, location_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)';
 
 //==========================================
 // Constructors
@@ -85,7 +88,7 @@ function Hike(data) {
   this.summary = data.summary;
   this.trail_url = data.url;
   this.conditions = data.conditionDetails;
-  // this.condition_date = 2018-07-21;
+  this.condition_date = data.conditionDate;
   // this.condition_time = 0:00:00;
   //"conditionDate": "2019-02-28 19:09:17"
 }
@@ -102,10 +105,10 @@ function locationQuery(request, response) {
   client.query(SQL.getLocation, [query])
     .then(result => {
       if (result.rows.length) {
-        console.log('from database');
+        console.log('location from database');
         response.send(result.rows[0]);
       } else {
-        console.log('from internet');
+        console.log('location from internet');
         searchLocation(query, response);
       }
     }).catch(handleError);
@@ -119,10 +122,7 @@ function searchLocation(query, response) {
     const firstResult = result.body.results[0];
     const location = new Location(query, firstResult);
     client.query(SQL.insertLocation, [location.search_query, location.formatted_query, location.latitude, location.longitude]).catch(handleError);
-    client.query('SELECT * FROM locations;').then(result => {
-      console.log(result.rows);
-      response.send(location);
-    }).catch(handleError);
+    response.send(location);
   }).catch(handleError);
 }
 
@@ -131,23 +131,15 @@ function weatherQuery(request, response) {
   const query = request.query.data;
   const route = 'weathers';
   client.query(SQL.getLocationReference, [query.latitude, query.longitude]).then(result => {
+    console.log(result.rows);
     const locationId = result.rows[0].id;
     checkDatabase(route, locationId).then(result => {
       if (result) {
-        console.log('from database');
-        console.log(result);
+        //call check date stored with difference parameter
+        console.log('weather from database');
         response.send(result.rows.map(dayObj => new DailyWeather(dayObj)));
-
-        // const difference = (Date.now() / 1000) - (parseInt(result.rows[0].time, 10));
-        // console.log(difference);
-        // if (difference < 86400) {
-        //   response.send(result.rows.map(dayObj => new DailyWeather(dayObj.forecast, dayObj.time)));
-        // }
-        // else {
-        //   searchWeather(query, result.rows[0].location_id, response, true);
-        // }
       } else {
-        console.log('from internet');
+        console.log('weather from internet');
         searchWeather(query, locationId, response, false);
       }
     }).catch(handleError);
@@ -159,14 +151,12 @@ function searchWeather(query, locationId, response, update) {
 
   superagent.get(weatherData).then(result => {
     const weeklyWeatherArray = result.body.daily.data.map(dayObj => {
-      // if (update) {
-      //   client.query('UPDATE weathers SET forecast=$1, time=$2 WHERE location_id=$3', [dayObj.summary, dayObj.time, locationId]);
-      // } else {
-      // }
-      client.query('INSERT INTO weathers (summary, time, location_id) VALUES ($1, $2, $3)', [dayObj.summary, dayObj.time, locationId]).catch(handleError);
+      if (update) {
+        //delete
+      }
+      client.query(SQL.insertWeather, [dayObj.summary, dayObj.time, locationId]).catch(handleError);
       return new DailyWeather(dayObj);
     });
-    console.log(weeklyWeatherArray);
     response.send(weeklyWeatherArray);
   }).catch(handleError);
 }
@@ -174,24 +164,32 @@ function searchWeather(query, locationId, response, update) {
 function moviesQuery(request, response) {
   const query = request.query.data;
   const route = 'movies';
+  client.query(SQL.getLocationReference, [query.latitude, query.longitude]).then(result => {
+    const locationId = result.rows[0].id;
+    checkDatabase(route, locationId).then(result => {
+      if (result) {
+        //call check date stored with difference parameter
+        console.log('movies from database');
+        response.send(result.rows.map(movie => new Movie(movie)));
+      } else {
+        console.log('movies from internet');
+        searchMovies(query, locationId, response, false);
+      }
+    }).catch(handleError);
+  }).catch(handleError);
+}
 
-  // checkDatabase(route, query).then(result => {
-  //   if (result) {
-  //     console.log('from database');
-  //     console.log(result.rows);
-  //     if () {
-  //     } else {
-  //     }
-  //   } else {
-  //   }
-  // });
-
-  const movieData = `https://api.themoviedb.org/3/search/movie?api_key=${process.env.MOVIE_API_KEY}&query=${request.query.data.search_query}`;
+function searchMovies(query, locationId, response, update) {
+  const movieData = `https://api.themoviedb.org/3/search/movie?api_key=${process.env.MOVIE_API_KEY}&query=${query.search_query}`;
 
   superagent.get(movieData).then(result => {
     const movieArray = [];
     for (let i = 0; i < 20; i++) {
       movieArray.push(new Movie(result.body.results[i]));
+      if (update) {
+        // delete
+      }
+      client.query(SQL.insertMovies, [movieArray[i].title, movieArray[i].overview, movieArray[i].average_votes, movieArray[i].total_votes, movieArray[i].popularity, movieArray[i].released_on, locationId]).catch(handleError);
     }
     response.send(movieArray);
   }).catch(handleError);
@@ -199,30 +197,71 @@ function moviesQuery(request, response) {
 
 function yelpQuery(request, response) {
   const query = request.query.data;
+  const route = 'yelp';
+  client.query(SQL.getLocationReference, [query.latitude, query.longitude]).then(result => {
+    const locationId = result.rows[0].id;
+    checkDatabase(route, locationId).then(result => {
+      if (result) {
+        //call check date stored with difference parameter
+        console.log('yelp from database');
+        response.send(result.rows.map(business => new YelpResult(business)));
+      } else {
+        console.log('yelp from internet');
+        searchYelp(query, locationId, response, false);
+      }
+    }).catch(handleError);
+  }).catch(handleError);
+}
+
+function searchYelp(query, locationId, response, update) {
   const yelpData = `https://api.yelp.com/v3/businesses/search?latitude=${query.latitude}&longitude=${query.longitude}`;
 
   superagent.get(yelpData).set('Authorization', `Bearer ${process.env.YELP_API_KEY}`).then(result => {
     const yelpArray = [];
     for (let i = 0; i < 20; i++) {
       yelpArray.push(new YelpResult(result.body.businesses[i]));
+      if (update) {
+        // delete
+      }
+      client.query(SQL.insertYelp, [yelpArray[i].name, yelpArray[i].image_url, yelpArray[i].price, yelpArray[i].rating, yelpArray[i].url, locationId]).catch(handleError);
     }
     response.send(yelpArray);
   }).catch(handleError);
-  //
 }
 
 function trailsQuery(request, response) {
   const query = request.query.data;
+  const route = 'trails';
+
+  client.query(SQL.getLocationReference, [query.latitude, query.longitude]).then(result => {
+    const locationId = result.rows[0].id;
+    checkDatabase(route, locationId).then(result => {
+      if (result) {
+        //call check date stored with difference parameter
+        console.log('trails from database');
+        response.send(result.rows.map(trail => new Hike(trail)));
+      } else {
+        console.log('trails from internet');
+        searchTrails(query, locationId, response, false);
+      }
+    }).catch(handleError);
+  }).catch(handleError);
+}
+
+function searchTrails(query, locationId, response, update) {
   const trailData = `https://www.hikingproject.com/data/get-trails?lat=${query.latitude}&lon=${query.longitude}&sort=distance&key=${process.env.TRAIL_API_KEY}`;
 
   superagent.get(trailData).then(result => {
     const trailsArray = [];
     for (let i = 0; i < 10; i++) {
       trailsArray.push(new Hike(result.body.trails[i]));
+      if (update) {
+        // delete
+      }
+      client.query(SQL.insertTrail, [trailsArray[i].name, trailsArray[i].location, trailsArray[i].length, trailsArray[i].stars, trailsArray[i].star_votes, trailsArray[i].summary, trailsArray[i].trail_url, trailsArray[i].conditions, trailsArray[i].condition_date, locationId]).catch(handleError);
     }
     response.send(trailsArray);
   }).catch(handleError);
-  //
 }
 
 function checkDatabase(route, locationId) {
