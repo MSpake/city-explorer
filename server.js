@@ -76,6 +76,20 @@ function YelpResult(data) {
   this.url = data.url;
 }
 
+function Hike(data) {
+  this.name = data.name;
+  this.location = data.location;
+  // this.length = data.length;
+  this.stars = data.stars;
+  this.star_votes = data.starVotes;
+  this.summary = data.summary;
+  this.trail_url = data.url;
+  this.conditions = data.conditionDetails;
+  // this.condition_date = 2018-07-21;
+  // this.condition_time = 0:00:00;
+  //"conditionDate": "2019-02-28 19:09:17"
+}
+
 
 //==========================================
 // Helper Functions
@@ -193,7 +207,15 @@ function yelpQuery(request, response) {
 
 function trailsQuery(request, response) {
   const query = request.query.data;
+  const trailData = `https://www.hikingproject.com/data/get-trails?lat=${query.latitude}&lon=${query.longitude}&sort=distance&key=${process.env.TRAIL_API_KEY}`;
 
+  superagent.get(trailData).then(result => {
+    const trailsArray = [];
+    for (let i = 0; i < 10; i++) {
+      trailsArray.push(new Hike(result.body.trails[i]));
+    }
+    response.send(trailsArray);
+  }).catch(handleError);
   //
 }
 
