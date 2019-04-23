@@ -59,13 +59,21 @@ function DailyWeather(data) {
 }
 
 function Movie(data) {
-  this.title = data.title,
-  this.overview = data.overview,
-  this.average_votes = data.vote_average,
-  this.total_votes = data.vote_count,
-  // this.image_url = data.poster_path,
-  this.popularity = data.popularity,
+  this.title = data.title;
+  this.overview = data.overview;
+  this.average_votes = data.vote_average;
+  this.total_votes = data.vote_count;
+  // this.image_url = data.poster_path;
+  this.popularity = data.popularity;
   this.released_on = data.release_date;
+}
+
+function YelpResult(data) {
+  this.name = data.name;
+  this.image_url = data.image_url;
+  this.price = data.price;
+  this.rating = data.rating;
+  this.url = data.url;
 }
 
 
@@ -111,7 +119,7 @@ function weatherQuery(request, response) {
   checkDatabase(route, query).then(result => {
     if (result) {
       console.log('from database');
-      console.log(result.rows);
+      // console.log(result.rows);
       const difference = (Date.now() / 1000) - (parseInt(result.rows[0].time, 10));
       console.log(difference);
       if (difference < 86400) {
@@ -138,6 +146,7 @@ function searchWeather(query, locationId, response, update) {
       }
       return new DailyWeather(dayObj);
     });
+    console.log(weeklyWeatherArray);
     response.send(weeklyWeatherArray);
   });
 }
@@ -170,7 +179,15 @@ function moviesQuery(request, response) {
 
 function yelpQuery(request, response) {
   const query = request.query.data;
+  const yelpData = `https://api.yelp.com/v3/businesses/search?latitude=${query.latitude}&longitude=${query.longitude}`;
 
+  superagent.get(yelpData).set('Authorization', `Bearer ${process.env.YELP_API_KEY}`).then(result => {
+    const yelpArray = [];
+    for (let i = 0; i < 20; i++) {
+      yelpArray.push(new YelpResult(result.body.businesses[i]));
+    }
+    response.send(yelpArray);
+  });
   //
 }
 
