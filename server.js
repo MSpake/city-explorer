@@ -108,7 +108,7 @@ function locationQuery(request, response) {
         console.log('from internet');
         searchLocation(query, response);
       }
-    });
+    }).catch(handleError);
 }
 
 function searchLocation(query, response) {
@@ -118,34 +118,40 @@ function searchLocation(query, response) {
     console.log('location get');
     const firstResult = result.body.results[0];
     const location = new Location(query, firstResult);
-    client.query(SQL.insertLocation, [location.search_query, location.formatted_query, location.latitude, location.longitude]);
+    client.query(SQL.insertLocation, [location.search_query, location.formatted_query, location.latitude, location.longitude]).catch(handleError);
     client.query('SELECT * FROM locations;').then(result => {
       console.log(result.rows);
       response.send(location);
-    });
-  });
+    }).catch(handleError);
+  }).catch(handleError);
 }
 
 function weatherQuery(request, response) {
   console.log('weather');
   const query = request.query.data;
   const route = 'weathers';
-  checkDatabase(route, query).then(result => {
-    if (result) {
-      console.log('from database');
-      // console.log(result.rows);
-      const difference = (Date.now() / 1000) - (parseInt(result.rows[0].time, 10));
-      console.log(difference);
-      if (difference < 86400) {
-        response.send(result.rows.map(dayObj => new DailyWeather(dayObj.forecast, dayObj.time)));
+  client.query(SQL.getLocationReference, [query.latitude, query.longitude]).then(result => {
+    const locationId = result.rows[0].id;
+    checkDatabase(route, locationId).then(result => {
+      if (result) {
+        console.log('from database');
+        console.log(result);
+        response.send(result.rows.map(dayObj => new DailyWeather(dayObj)));
+
+        // const difference = (Date.now() / 1000) - (parseInt(result.rows[0].time, 10));
+        // console.log(difference);
+        // if (difference < 86400) {
+        //   response.send(result.rows.map(dayObj => new DailyWeather(dayObj.forecast, dayObj.time)));
+        // }
+        // else {
+        //   searchWeather(query, result.rows[0].location_id, response, true);
+        // }
       } else {
-        searchWeather(query, result.rows[0].location_id, response, true);
+        console.log('from internet');
+        searchWeather(query, locationId, response, false);
       }
-    } else {
-      console.log('from internet');
-      searchWeather(query, result.rows[0].location_id, response, false);
-    }
-  });
+    }).catch(handleError);
+  }).catch(handleError);
 }
 
 function searchWeather(query, locationId, response, update) {
@@ -153,16 +159,16 @@ function searchWeather(query, locationId, response, update) {
 
   superagent.get(weatherData).then(result => {
     const weeklyWeatherArray = result.body.daily.data.map(dayObj => {
-      if (update) {
-        client.query('UPDATE weathers SET forecast=$1, time=$2 WHERE location_id=$3', [dayObj.summary, dayObj.time, locationId]);
-      } else {
-        client.query('INSERT INTO weathers (forecast, time, location_id) VALUES ($1, $2, $3)', [dayObj.summary, dayObj.time, locationId]);
-      }
+      // if (update) {
+      //   client.query('UPDATE weathers SET forecast=$1, time=$2 WHERE location_id=$3', [dayObj.summary, dayObj.time, locationId]);
+      // } else {
+      // }
+      client.query('INSERT INTO weathers (summary, time, location_id) VALUES ($1, $2, $3)', [dayObj.summary, dayObj.time, locationId]).catch(handleError);
       return new DailyWeather(dayObj);
     });
     console.log(weeklyWeatherArray);
     response.send(weeklyWeatherArray);
-  });
+  }).catch(handleError);
 }
 
 function moviesQuery(request, response) {
@@ -188,7 +194,7 @@ function moviesQuery(request, response) {
       movieArray.push(new Movie(result.body.results[i]));
     }
     response.send(movieArray);
-  });
+  }).catch(handleError);
 }
 
 function yelpQuery(request, response) {
@@ -201,7 +207,7 @@ function yelpQuery(request, response) {
       yelpArray.push(new YelpResult(result.body.businesses[i]));
     }
     response.send(yelpArray);
-  });
+  }).catch(handleError);
   //
 }
 
@@ -219,16 +225,12 @@ function trailsQuery(request, response) {
   //
 }
 
-function checkDatabase(route, query) {
-  let check = client.query(SQL.getLocationReference, [query.latitude, query.longitude]).then(result => {
-    const locationId = result.rows[0].id;
-    const inDatabase = client.query(`SELECT * FROM ${route} WHERE location_id=$1`, [locationId]).then(result => {
-      if (result.rows.length) return result;
-      else return false;
-    });
-    return inDatabase;
-  });
-  return check;
+function checkDatabase(route, locationId) {
+  const inDatabase = client.query(`SELECT * FROM ${route} WHERE location_id=$1`, [locationId]).then(result => {
+    if (result.rows.length) return result;
+    else return false;
+  }).catch(handleError);
+  return inDatabase;
 }
 
 function handleError(error, response) {
