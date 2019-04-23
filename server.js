@@ -184,7 +184,7 @@ function searchMovies(query, locationId, response, update) {
 
   superagent.get(movieData).then(result => {
     const movieArray = [];
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < (result.body.results.length || 20); i++) {
       movieArray.push(new Movie(result.body.results[i]));
       if (update) {
         // delete
@@ -218,7 +218,7 @@ function searchYelp(query, locationId, response, update) {
 
   superagent.get(yelpData).set('Authorization', `Bearer ${process.env.YELP_API_KEY}`).then(result => {
     const yelpArray = [];
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < (result.body.results.length || 20); i++) {
       yelpArray.push(new YelpResult(result.body.businesses[i]));
       if (update) {
         // delete
@@ -253,7 +253,7 @@ function searchTrails(query, locationId, response, update) {
 
   superagent.get(trailData).then(result => {
     const trailsArray = [];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < (result.body.results.length || 10); i++) {
       trailsArray.push(new Hike(result.body.trails[i]));
       if (update) {
         // delete
